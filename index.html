@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<title>three.jsで球面座標</title>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/101/three.min.js"></script>
+<script src="https://code.createjs.com/1.0.0/createjs.min.js"></script>
+<script>
+
+
+
+// 描画領域のサイズ
+let width;
+let height;
+// レンダラー
+let renderer;
+// シーン
+let scene;
+// カメラ
+let camera;
+// ライト
+let directionalLight;
+// スフィア
+let Spere;
+// マウス移動用角度
+let rot = 0; 
+// マウス座標
+let mouseX = 0; 
+
+
+
+// HTML読み込んだら
+window.addEventListener("DOMContentLoaded", () => {
+
+    // 初期化
+    init();
+
+    // マイフレーム実行
+    tick();
+
+});
+
+
+// マウス座標取得用
+document.addEventListener("mousemove", (event) => {
+  mouseX = event.pageX;
+});
+
+
+
+let init = () =>{
+
+    // 描画領域のサイズを指定
+    width = window.innerWidth;
+    height = window.innerHeight;
+
+    // レンダラーを作成
+    renderer = new THREE.WebGLRenderer({
+    canvas: document.querySelector("#stage")
+    });
+    // スマホでも綺麗に見えるように、デバイスピクセル比も設定。
+    // これを設定しないとスマホだとぼやけて表示されるらしい。
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(width, height);
+
+    // シーンを作成
+    scene = new THREE.Scene();
+
+    // カメラを作成
+    // 引数 : 画角、アスペクト比、描画開始距離、描画終了距離
+    camera = new THREE.PerspectiveCamera( 45, width / height, 1, 10000 );
+    // カメラの位置（z軸をプラスが手前？多分）
+    camera.position.set(0, 0, +1000);
+
+    // DirectionalLightは平行光源
+    // ライトもシーンに追加することで反映されます。
+    directionalLight = new THREE.DirectionalLight(
+    0xffffff
+    );
+
+    // 光源が斜めから差し込むように位置を変更
+    directionalLight.position.set(1, 1, 1);
+    scene.add(directionalLight);
+
+
+    // Spereクラス（半径、パーティクル数）
+    Spere = new PointSpere(300,20000);
+
+    // Spere初期化
+    Spere.init();
+
+}
+
+// 描画
+let tick = () => {
+
+    // マウスの左右に反応
+    cameraMouseMove();
+
+    // requestAnimationFrame()は引数として渡された関数を、毎フレーム実行
+    requestAnimationFrame(tick);
+
+    // レンダリング
+    renderer.render(scene, camera);
+
+    // 頂点更新にはこれが必要らしい..
+    Spere.mesh.geometry.verticesNeedUpdate = true;
+
+}
+
+
+// マウスの左右の動きにに反応
+let cameraMouseMove = () =>{
+  // マウスの位置に応じて角度を設定
+  // マウスのX座標がステージの幅の何%の位置にあるか調べてそれを360度で乗算する
+  const targetRot = (mouseX / window.innerWidth) * 360;
+  // イージングの公式を用いて滑らかにする
+  rot += (targetRot - rot) * 0.02;
+
+  // ラジアンに変換する
+  const radian = rot * Math.PI / 180;
+  // 角度に応じてカメラの位置を設定
+  camera.position.x = 1000 * Math.sin(radian);
+  camera.position.z = 1000 * Math.cos(radian);
+  // 原点方向を見つめる
+  camera.lookAt(new THREE.Vector3(0, 0, 0));
+
+}
+
+
+
+
+
+
+
+// PointSpereクラス
+class PointSpere{
+
+    // コンストラクタ
+    constructor(size, particleNum) {
+
+        // 球体サイズ
+        this.R = size; 
+
+        // 表示するパーティクルの数
+        this.NUM = particleNum;
+
+        // 現在地頂点を格納するGeometry
+        this.geometry = new THREE.Geometry();
+
+        // 目的地頂点を格納するGeometry
+        this.movegeometry = new THREE.Geometry();
+
+        // メッシュ
+        this.mesh;
+    }
+
+    // 最初の初期値や向かう先の頂点をセット
+    init(){
+
+        // 最初の頂点たちを初期化
+        for (let i = 0; i < this.NUM; i++){
+            this.geometry.vertices.push(
+                new THREE.Vector3(
+                    0,0,0
+                )
+            );
+        }
+
+        // ランダムな頂点座標にセット
+        this.updateTargetPos();
+
+        //マテリアルを作成、色とサイズも一緒に
+        const material = new THREE.PointsMaterial({
+            color: 'ffffff',
+            size:2
+        });
+        this.mesh = new THREE.Points(this.geometry, material);
+        scene.add(this.mesh);
+    }
+
+    // 定期的に向かう先の頂点座標をシャッフル
+    updateTargetPos(){
+
+        // 一度空にに(これでいいのか...)
+        this.movegeometry = new THREE.Geometry();
+
+        // 定期的に向かう先の頂点座標をセット
+        for (let i = 0; i < this.NUM; i++){
+            // ランダムなθの値
+            let randTheta = Math.floor(Math.random() * 361);
+            // ランダムなφの値
+            let randPhi = Math.floor(Math.random() * 181);
+            // 頂点のセット
+            this.movegeometry.vertices.push(
+                new THREE.Vector3(
+                    this.R * Math.sin(randTheta * (Math.PI / 180)) * Math.cos(randPhi * (Math.PI / 180)),
+                    this.R * Math.sin(randTheta * (Math.PI / 180)) * Math.sin(randPhi * (Math.PI / 180)),
+                    this.R * Math.cos(randTheta * (Math.PI / 180))
+                )
+            );
+        }
+
+        // 頂点シャッフルアニメーション
+        this.animetion();
+    }
+    
+
+    // 頂点シャッフルアニメーション
+    animetion(){
+
+        // 全頂点を目的地に移動
+        for (let i = 0; i < this.NUM; i++){
+            let moveThree = new THREE.Vector3(
+                this.movegeometry.vertices[i].x,
+                this.movegeometry.vertices[i].y,
+                this.movegeometry.vertices[i].z,
+            );
+            // Tweenで移動してみた
+            createjs.Tween.get(this.geometry.vertices[i])
+            .to(moveThree, 1000, createjs.Ease.cubicOut);
+        }
+
+        // 2秒に一回目的地の頂点をシャッフル  （これでいいのかな....）
+        setTimeout(function(){
+            Spere.updateTargetPos();
+        },2000);  
+
+    }
+}
+
+</script>
+</body>
+</html>
